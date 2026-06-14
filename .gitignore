@@ -1,0 +1,6 @@
+.env
+qrb.db
+__pycache__/
+*.pyc
+.venv/
+venv/
