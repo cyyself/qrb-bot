@@ -70,13 +70,13 @@ logger = logging.getLogger("qrb-bot")
 # --------------------------------------------------------------------------- #
 def init_db() -> None:
     with sqlite3.connect(DB_PATH) as conn:
+        # Events store only the user_id; names are resolved via the users table.
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS qrb_events (
                 id        INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id   INTEGER NOT NULL,
                 user_id   INTEGER NOT NULL,
-                username  TEXT,
                 ts        INTEGER NOT NULL
             )
             """
@@ -84,14 +84,34 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_chat_ts ON qrb_events (chat_id, ts)"
         )
+        # user_id -> latest known display name.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id    INTEGER PRIMARY KEY,
+                username   TEXT,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
 
 
 def record_event(chat_id: int, user_id: int, username: str, ts: int) -> None:
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "INSERT INTO qrb_events (chat_id, user_id, username, ts) "
-            "VALUES (?, ?, ?, ?)",
-            (chat_id, user_id, username, ts),
+            "INSERT INTO qrb_events (chat_id, user_id, ts) VALUES (?, ?, ?)",
+            (chat_id, user_id, ts),
+        )
+        # Keep the uid -> username mapping current.
+        conn.execute(
+            """
+            INSERT INTO users (user_id, username, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username   = excluded.username,
+                updated_at = excluded.updated_at
+            """,
+            (user_id, username, ts),
         )
 
 
@@ -109,12 +129,13 @@ def today_counts(chat_id: int) -> list[tuple[str, int]]:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT user_id,
-                   MAX(username) AS username,
-                   COUNT(*)      AS cnt
-            FROM qrb_events
-            WHERE chat_id = ? AND ts >= ? AND ts < ?
-            GROUP BY user_id
+            SELECT e.user_id,
+                   u.username,
+                   COUNT(*) AS cnt
+            FROM qrb_events e
+            LEFT JOIN users u ON u.user_id = e.user_id
+            WHERE e.chat_id = ? AND e.ts >= ? AND e.ts < ?
+            GROUP BY e.user_id
             ORDER BY cnt DESC
             """,
             (chat_id, start_ts, end_ts),

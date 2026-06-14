@@ -78,6 +78,13 @@ Then add the bot to your group. It starts counting qrb stickers immediately.
 
 ## Data
 
-Each detected sticker is stored as a row in the `qrb_events` table
-(`chat_id`, `user_id`, `username`, `ts`). `/qrbstat` aggregates rows whose
-timestamp falls within the current local calendar day.
+The SQLite database holds two tables:
+
+- **`qrb_events`** — one row per counted qrb: `id`, `chat_id`, `user_id`, `ts`.
+  Identifies the user only by id, so it stays small and never duplicates names.
+- **`users`** — maps `user_id` → latest `username` (+ `updated_at`). Refreshed on
+  every event, so a user's display name is stored once and stays current.
+
+`/qrbstat` aggregates `qrb_events` rows whose timestamp falls within the current
+local calendar day, joining `users` to resolve each id to a name (falling back to
+`user <id>` if the name isn't known yet).
