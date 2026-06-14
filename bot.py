@@ -45,6 +45,13 @@ QRB_FILE_UNIQUE_IDS = {
     for s in os.environ.get("QRB_FILE_UNIQUE_IDS", DEFAULT_FILE_UNIQUE_IDS).split(",")
     if s.strip()
 }
+# Comma-separated phrases; a text message containing any of them is counted as a
+# qrb. Set empty to disable text counting.
+QRB_TEXT = [
+    s.strip()
+    for s in os.environ.get("QRB_TEXT", "想去日本").split(",")
+    if s.strip()
+]
 # Timezone used to decide what "today" means. Defaults to the system timezone.
 TZ = ZoneInfo(os.environ["QRB_TZ"]) if os.environ.get("QRB_TZ") else None
 # When set (QRB_DEBUG=1), dump every incoming sticker's full payload so you can
@@ -122,9 +129,8 @@ def display_name(update: Update) -> str:
     user = update.effective_user
     if user is None:
         return "unknown"
-    if user.username:
-        return f"@{user.username}"
-    return user.full_name or f"user {user.id}"
+    # Use the plain display name (not @username) so /qrbstat doesn't ping people.
+    return user.full_name or user.username or f"user {user.id}"
 
 
 async def dump_sticker(update: Update) -> None:
@@ -154,6 +160,16 @@ async def dump_sticker(update: Update) -> None:
     await message.reply_text("\n".join(lines))
 
 
+def count_qrb(update: Update) -> None:
+    """Record one qrb for the user who sent the current message."""
+    record_event(
+        chat_id=update.effective_chat.id,
+        user_id=update.effective_user.id,
+        username=display_name(update),
+        ts=int(time.time()),
+    )
+
+
 async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     sticker = message.sticker if message else None
@@ -166,15 +182,16 @@ async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     # Count only stickers whose file_unique_id is in the allowlist.
-    if sticker.file_unique_id not in QRB_FILE_UNIQUE_IDS:
-        return
+    if sticker.file_unique_id in QRB_FILE_UNIQUE_IDS:
+        count_qrb(update)
 
-    record_event(
-        chat_id=update.effective_chat.id,
-        user_id=update.effective_user.id,
-        username=display_name(update),
-        ts=int(time.time()),
-    )
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    text = message.text if message else None
+    # Count a message containing any of the qrb phrases (e.g. "想去日本").
+    if text and any(phrase in text for phrase in QRB_TEXT):
+        count_qrb(update)
 
 
 async def qrbstat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -220,6 +237,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("qrbstat", qrbstat))
     app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     logger.info("qrb-bot starting…")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

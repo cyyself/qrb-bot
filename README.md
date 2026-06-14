@@ -1,8 +1,12 @@
 # qrb-bot ✈️🇯🇵
 
 A Telegram bot that watches a group for the **qrb** sticker (the cat-on-a-plane
-"想去日本了" sticker) and counts how many times each user sends it. Run
-`/qrbstat` to see today's leaderboard for the chat.
+"想去日本了" sticker) and counts how many times each user sends it. It also
+counts text messages containing the phrase **想去日本**. Run `/qrbstat` to see
+today's leaderboard for the chat.
+
+**Try it:** add the public bot [@iwantqrbot](https://t.me/iwantqrbot) to your
+group. (Or self-host your own instance — see below.)
 
 The "想去日本了" sticker appears in these sticker sets:
 
@@ -18,6 +22,10 @@ known qrb sticker ids are the default, so it works out of the box.
 
 To add another sticker, run with `QRB_DEBUG=1`, send the sticker in any chat, and
 the bot replies with its `file_unique_id` — add it to `QRB_FILE_UNIQUE_IDS`.
+
+It also counts text messages containing any of the phrases in `QRB_TEXT`
+(comma-separated, default `想去日本`). A message counts once even if it contains
+several of the phrases.
 
 ## Setup
 
@@ -63,6 +71,7 @@ Then add the bot to your group. It starts counting qrb stickers immediately.
 | ---------------------- | ---------------- | ---------------------------------------------------- |
 | `TELEGRAM_BOT_TOKEN`   | _(req'd)_        | Token from @BotFather.                               |
 | `QRB_FILE_UNIQUE_IDS`  | known qrb ids    | Comma-separated sticker ids to count.               |
+| `QRB_TEXT`             | `想去日本`       | Comma-separated phrases; a text msg with any counts. Empty disables text counting. |
 | `QRB_DB`               | `qrb.db`         | SQLite database file path.                           |
 | `QRB_TZ`               | system tz        | Timezone for "today", e.g. `Asia/Shanghai`.        |
 | `QRB_DEBUG`            | _(off)_          | `1` to dump incoming stickers instead of counting.  |
